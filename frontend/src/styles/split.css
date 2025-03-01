@@ -1,0 +1,69 @@
+.gutter {
+  background-color: rgba(31, 41, 55, 0.5);
+  background-repeat: no-repeat;
+  background-position: 50%;
+  transition: background-color 0.2s;
+}
+
+.gutter:hover {
+  background-color: rgba(79, 70, 229, 0.5);
+}
+
+.gutter.gutter-horizontal {
+  cursor: col-resize;
+  position: relative;
+}
+
+.gutter.gutter-horizontal::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 2rem;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 1px;
+  transition: background-color 0.2s;
+}
+
+.gutter.gutter-horizontal:hover::after {
+  background-color: rgba(255, 255, 255, 0.4);
+}
+
+.gutter.gutter-vertical {
+  cursor: row-resize;
+  position: relative;
+}
+
+.gutter.gutter-vertical::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  height: 2px;
+  width: 2rem;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 1px;
+  transition: background-color 0.2s;
+}
+
+.gutter.gutter-vertical:hover::after {
+  background-color: rgba(255, 255, 255, 0.4);
+}
+
+.split {
+  display: flex;
+  background-color: rgba(17, 24, 39, 0.7);
+  backdrop-filter: blur(8px);
+}
+
+.split.vertical {
+  flex-direction: column;
+}
+
+/* 添加阴影效果 */
+.split > div {
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+} 

@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import './split.css';
+
+@layer base {
+  :root {
+    --font-sans: var(--font-inter);
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+  }
+  
+  body {
+    @apply bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 text-gray-100;
+    overflow: hidden;
+    font-family: var(--font-sans);
+  }
+
+  /* 自定义滚动条 */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: rgba(31, 41, 55, 0.5);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(79, 70, 229, 0.5);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(79, 70, 229, 0.7);
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-lg p-4 shadow-lg;
+  }
+  
+  .button-primary {
+    @apply px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg 
+           flex items-center justify-center transition-colors duration-200
+           shadow-lg shadow-purple-600/20 hover:shadow-purple-600/30;
+  }
+  
+  .button-secondary {
+    @apply px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg 
+           transition-colors duration-200 font-medium focus:outline-none focus:ring-2 
+           focus:ring-white/30 focus:ring-offset-2 focus:ring-offset-gray-900
+           shadow-lg shadow-black/20;
+  }
+  
+  .input-primary {
+    @apply w-full px-4 py-2 bg-gray-800/50 border border-gray-700/50 rounded-lg 
+           text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 
+           focus:ring-purple-500/50 focus:border-transparent backdrop-blur-sm
+           shadow-inner shadow-black/10;
+  }
+
+  /* 新增卡片样式 */
+  .card {
+    @apply bg-gray-800/30 backdrop-blur-sm border border-gray-700/50 rounded-lg
+           shadow-lg shadow-black/20 hover:shadow-xl hover:shadow-black/30
+           transition-all duration-200;
+  }
+
+  /* 新增渐变文本样式 */
+  .gradient-text {
+    @apply bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent;
+  }
+}
+
+/* ReactFlow 自定义样式 */
+.react-flow__node {
+  @apply bg-gray-800/70 text-gray-100 border-gray-700/50 backdrop-blur-sm shadow-lg;
+}
+
+.react-flow__controls {
+  @apply bg-gray-800/70 border-gray-700/50 backdrop-blur-sm;
+}
+
+.react-flow__controls button {
+  @apply bg-gray-800/70 border-gray-700/50 text-gray-100 hover:bg-gray-700/70;
+}
+
+.react-flow__minimap {
+  @apply bg-gray-800/70 border-gray-700/50 backdrop-blur-sm;
+}
+
+.react-flow__background {
+  @apply bg-gray-950;
+}
+
+/* 添加动画效果 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-slideIn {
+  animation: slideIn 0.3s ease-out;
+} 
