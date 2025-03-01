@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import { Plus, Archive, Trash, CaretDown, CaretRight } from 'phosphor-react';
+import { Plus, Archive, Trash } from 'phosphor-react';
+import { CaretDownIcon, CaretRightIcon } from '@/components/Icons';
 import { useChatContext } from './ChatContext';
 
 export const SessionList: React.FC = () => {
@@ -79,7 +80,7 @@ export const SessionList: React.FC = () => {
         onClick={() => setIsCollapsed(!isCollapsed)}
         className="absolute right-0 top-2 p-2 text-gray-400 hover:text-gray-200"
       >
-        {isCollapsed ? <CaretRight size={20} /> : <CaretDown size={20} />}
+        {isCollapsed ? <CaretRightIcon size={20} /> : <CaretDownIcon size={20} />}
       </button>
 
       {/* 新建会话按钮 */}
@@ -107,7 +108,7 @@ export const SessionList: React.FC = () => {
                 onClick={() => setShowArchived(!showArchived)}
                 className="flex items-center text-xs font-medium text-gray-400 px-3 mb-2 hover:text-gray-200"
               >
-                {showArchived ? <CaretDown size={12} /> : <CaretRight size={12} />}
+                {showArchived ? <CaretDownIcon size={12} /> : <CaretRightIcon size={12} />}
                 <span className="ml-1">已归档会话 ({archivedSessions.length})</span>
               </button>
               {showArchived && (

@@ -1,5 +1,8 @@
 import { ReactNode } from 'react';
 
+/**
+ * 消息类型
+ */
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -16,6 +19,9 @@ export interface Message {
   }>;
 }
 
+/**
+ * 聊天会话类型
+ */
 export interface ChatSession {
   id: string;
   title: string;
@@ -26,6 +32,9 @@ export interface ChatSession {
   archived: boolean;
 }
 
+/**
+ * 代理类型
+ */
 export interface Agent {
   name: string;
   role: string;
@@ -34,6 +43,9 @@ export interface Agent {
   online: boolean;
 }
 
+/**
+ * 聊天上下文类型
+ */
 export interface ChatContextType {
   currentSession: ChatSession | null;
   sessions: ChatSession[];
@@ -41,7 +53,6 @@ export interface ChatContextType {
   theme: 'light' | 'dark';
   isConnected: boolean;
   isLoadingMore: boolean;
-  hasMoreMessages: boolean;
   createSession: () => void;
   switchSession: (sessionId: string) => void;
   archiveSession: (sessionId: string) => void;
@@ -50,9 +61,12 @@ export interface ChatContextType {
   editMessage: (messageId: string, content: string) => void;
   deleteMessage: (messageId: string) => void;
   setTheme: (theme: 'light' | 'dark') => void;
-  loadMoreMessages: (sessionId: string) => Promise<boolean>;
+  loadMoreMessages: (sessionId: string) => Promise<void>;
 }
 
+/**
+ * 组件Props类型
+ */
 export interface ChatProps {
   initialSession?: ChatSession;
   onSessionChange?: (session: ChatSession) => void;

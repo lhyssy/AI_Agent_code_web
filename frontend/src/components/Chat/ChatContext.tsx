@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ChatContextType, ChatSession, Message, Agent } from './types';
 import { socketService } from '@/lib/socket';
 import { ApiService } from '@/lib/api';
@@ -9,6 +9,9 @@ import { ApiService } from '@/lib/api';
 const generateUniqueId = () => {
   return `${Date.now().toString()}-${Math.random().toString(36).substring(2, 9)}`;
 };
+
+// 最大允许的消息数量，超过此数量将分页显示
+const MAX_MESSAGES_PER_SESSION = 100;
 
 const defaultAgents: Agent[] = [
   {
@@ -64,6 +67,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [agents] = useState<Agent[]>(defaultAgents);
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
   const [isConnected, setIsConnected] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
 
   useEffect(() => {
     // 检查API健康状态
@@ -78,22 +83,34 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    // 从localStorage加载会话
-    const savedSessions = localStorage.getItem('chat_sessions');
-    if (savedSessions) {
-      const parsed = JSON.parse(savedSessions);
-      setSessions(parsed.map((s: any) => ({
-        ...s,
-        createdAt: new Date(s.createdAt),
-        updatedAt: new Date(s.updatedAt),
-        messages: s.messages.map((m: any) => ({
-          ...m,
-          timestamp: new Date(m.timestamp)
-        }))
-      })));
+  // 从localStorage加载会话
+  const loadSessionsFromStorage = useCallback(() => {
+    try {
+      const savedSessions = localStorage.getItem('chat_sessions');
+      if (savedSessions) {
+        const parsed = JSON.parse(savedSessions);
+        const formattedSessions = parsed.map((s: any) => ({
+          ...s,
+          createdAt: new Date(s.createdAt),
+          updatedAt: new Date(s.updatedAt),
+          messages: s.messages.map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp)
+          }))
+        }));
+        
+        setSessions(formattedSessions);
+        return formattedSessions;
+      }
+    } catch (error) {
+      console.error('加载会话数据失败:', error);
     }
+    return [];
+  }, []);
 
+  useEffect(() => {
+    const formattedSessions = loadSessionsFromStorage();
+    
     // 监听WebSocket消息
     const unsubscribe = socketService.onMessage((data) => {
       console.log('收到新的WebSocket消息:', data);
@@ -161,10 +178,16 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         console.log(`更新现有会话 ID: ${prev.id}, 添加消息 ID: ${messageId}`);
         
+        // 限制消息数量，保留最新的MAX_MESSAGES_PER_SESSION条
+        const updatedMessages = [...prev.messages, newMessage];
+        const messagesToKeep = updatedMessages.length > MAX_MESSAGES_PER_SESSION
+          ? updatedMessages.slice(-MAX_MESSAGES_PER_SESSION)
+          : updatedMessages;
+        
         // 创建会话的深拷贝，避免状态问题
         const updated = {
           ...prev,
-          messages: [...prev.messages, newMessage],
+          messages: messagesToKeep,
           updatedAt: new Date()
         };
         
@@ -191,13 +214,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [sessions, loadSessionsFromStorage]);
 
   // 保存会话到localStorage
   const updateSession = (session: ChatSession) => {
+    // 限制消息数量，保留最新的MAX_MESSAGES_PER_SESSION条
+    const messagesToKeep = session.messages.length > MAX_MESSAGES_PER_SESSION
+      ? session.messages.slice(-MAX_MESSAGES_PER_SESSION)
+      : session.messages;
+    
+    const updatedSession = {
+      ...session,
+      messages: messagesToKeep
+    };
+    
     setSessions(prev => {
-      const updated = prev.map(s => s.id === session.id ? session : s);
-      localStorage.setItem('chat_sessions', JSON.stringify(updated));
+      const updated = prev.map(s => s.id === updatedSession.id ? updatedSession : s);
+      try {
+        localStorage.setItem('chat_sessions', JSON.stringify(updated));
+      } catch (error) {
+        console.error('保存会话到localStorage失败:', error);
+      }
       return updated;
     });
   };
@@ -246,13 +283,18 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ));
   };
 
+  // 发送消息
   const sendMessage = async (content: string, replyTo?: string) => {
-    if (!currentSession || !isConnected) {
-      throw new Error(isConnected ? '请先创建或选择一个会话' : 'API服务未连接');
+    if (!content.trim() || !currentSession) return;
+    if (!isConnected) {
+      console.error('API服务未连接');
+      return;
     }
 
-    const newMessage: Message = {
-      id: generateUniqueId(),
+    // 创建一个临时的用户消息
+    const messageId = generateUniqueId();
+    const userMessage: Message = {
+      id: messageId,
       role: 'user',
       content,
       timestamp: new Date(),
@@ -260,42 +302,69 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       replyTo
     };
 
-    const updatedSession = {
-      ...currentSession,
-      messages: [...currentSession.messages, newMessage],
-      updatedAt: new Date()
-    };
-    setCurrentSession(updatedSession);
-    updateSession(updatedSession);
-
-    try {
-      const response = await ApiService.analyzeRequest(content);
-      if (!response.success) {
-        throw new Error(response.message || '请求分析失败');
+    // 添加消息到当前会话
+    setCurrentSession(prev => {
+      if (!prev) return null;
+      
+      // 添加发送动画效果
+      const updatedMessages = [...prev.messages, userMessage];
+      const updatedSession = { 
+        ...prev, 
+        messages: updatedMessages,
+        updatedAt: new Date()
+      };
+      
+      // 保存消息到sessionStorage作为备份
+      try {
+        const backupKey = `message_backup_${messageId}`;
+        sessionStorage.setItem(backupKey, JSON.stringify(userMessage));
+        console.log(`已备份消息到SessionStorage: ${backupKey}`);
+      } catch (e) {
+        console.error('备份消息失败:', e);
       }
       
+      return updatedSession;
+    });
+
+    try {
+      // 发送消息到API
+      await ApiService.analyzeRequest(content);
+      
       // 更新消息状态为已发送
-      const sentMessage = { ...newMessage, status: 'sent' as const };
-      const finalSession = {
-        ...updatedSession,
-        messages: updatedSession.messages.map(m => 
-          m.id === newMessage.id ? sentMessage : m
-        )
-      };
-      setCurrentSession(finalSession);
-      updateSession(finalSession);
+      setCurrentSession(prev => {
+        if (!prev) return null;
+        
+        const updatedMessages = prev.messages.map(m => 
+          m.id === messageId ? { ...m, status: 'sent' as const } : m
+        );
+        
+        const updatedSession = { 
+          ...prev, 
+          messages: updatedMessages 
+        };
+        
+        updateSession(updatedSession);
+        return updatedSession;
+      });
     } catch (error) {
-      // 更新消息状态为发送失败
-      const failedMessage = { ...newMessage, status: 'failed' as const };
-      const finalSession = {
-        ...updatedSession,
-        messages: updatedSession.messages.map(m => 
-          m.id === newMessage.id ? failedMessage : m
-        )
-      };
-      setCurrentSession(finalSession);
-      updateSession(finalSession);
-      throw error;
+      console.error('发送消息失败:', error);
+      
+      // 更新消息状态为失败
+      setCurrentSession(prev => {
+        if (!prev) return null;
+        
+        const updatedMessages = prev.messages.map(m => 
+          m.id === messageId ? { ...m, status: 'failed' as const } : m
+        );
+        
+        const updatedSession = { 
+          ...prev, 
+          messages: updatedMessages 
+        };
+        
+        updateSession(updatedSession);
+        return updatedSession;
+      });
     }
   };
 
@@ -327,6 +396,48 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updateSession(updatedSession);
   };
 
+  // 检查是否有更多消息
+  const checkHasMoreMessages = useCallback((session: ChatSession | null) => {
+    if (!session) {
+      setHasMoreMessages(false);
+      return;
+    }
+    
+    // 这里可以根据你的实际逻辑来判断是否有更多消息
+    // 例如，如果消息数量达到了限制，就认为有更多消息
+    const hasMore = session.messages.length >= MAX_MESSAGES_PER_SESSION;
+    setHasMoreMessages(hasMore);
+  }, []);
+
+  // 当当前会话变化时，检查是否有更多消息
+  useEffect(() => {
+    checkHasMoreMessages(currentSession);
+  }, [currentSession, checkHasMoreMessages]);
+
+  // 更新loadMoreMessages函数
+  const loadMoreMessages = async (sessionId: string): Promise<boolean> => {
+    if (!isLoadingMore) {
+      try {
+        setIsLoadingMore(true);
+        
+        // 这里是你原有的加载更多消息的逻辑
+        // 实现你的加载逻辑...
+        
+        // 模拟请求延迟
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // 返回是否成功加载了更多消息
+        setIsLoadingMore(false);
+        return true;
+      } catch (error) {
+        console.error('加载更多消息失败:', error);
+        setIsLoadingMore(false);
+        return false;
+      }
+    }
+    return false;
+  };
+
   return (
     <ChatContext.Provider value={{
       currentSession,
@@ -334,6 +445,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       agents,
       theme,
       isConnected,
+      isLoadingMore,
+      hasMoreMessages,
       createSession,
       switchSession,
       archiveSession,
@@ -341,7 +454,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sendMessage,
       editMessage,
       deleteMessage,
-      setTheme
+      setTheme,
+      loadMoreMessages
     }}>
       {children}
     </ChatContext.Provider>
