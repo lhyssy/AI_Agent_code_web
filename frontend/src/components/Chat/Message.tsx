@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { User, Robot, Copy, Pencil, Trash, ArrowBendUpLeft, ArrowClockwise } from 'phosphor-react';
@@ -20,6 +20,30 @@ export const Message: React.FC<MessageProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const [showActions, setShowActions] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+  
+  // 确保消息组件在挂载后保持可见
+  useEffect(() => {
+    setIsVisible(true);
+    
+    // 尝试从SessionStorage加载备份消息
+    if (message.id) {
+      try {
+        const backupKey = `message_backup_${message.id}`;
+        const backup = sessionStorage.getItem(backupKey);
+        if (backup) {
+          console.log(`找到消息备份: ${backupKey}`);
+          const backupMessage = JSON.parse(backup);
+          if (backupMessage.content && backupMessage.content !== message.content) {
+            console.log(`使用备份消息内容替换当前内容: ${message.id}`);
+            setEditContent(backupMessage.content);
+          }
+        }
+      } catch (e) {
+        console.error('加载消息备份失败:', e);
+      }
+    }
+  }, [message.id, message.content]);
 
   const agent = message.agentName ? 
     agents.find(a => a.name.toLowerCase() === message.agentName?.toLowerCase()) :

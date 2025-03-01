@@ -5,6 +5,8 @@ from models.agent import (
     Task, CodeArtifact
 )
 from utils.baidu_client import BaiduClient
+import time
+import logging
 
 class MultiAgentSystem:
     def __init__(self, ws_handler=None):
@@ -21,178 +23,148 @@ class MultiAgentSystem:
         self.artifacts: Dict[str, CodeArtifact] = {}
         self.baidu_client = BaiduClient()
         
-    def process_input(self, user_input: str) -> Dict:
-        """处理用户输入，协调多个Agent完成任务"""
-        # 记录用户输入
-        self.conversation_history.append({
-            "role": "user",
-            "content": user_input,
-            "timestamp": datetime.now().isoformat()
-        })
+    def process_input(self, input_content: str) -> Dict:
+        """处理用户输入，获取AI回复
         
+        Args:
+            input_content: 用户输入内容
+            
+        Returns:
+            Dict: 包含成功状态和对话内容的字典
+        """
         try:
-            # 1. Mike(Team Leader)首先处理输入
-            mike_prompt = f"""作为团队负责人 Mike，你的职责是分析用户需求并制定任务分配方案。请按照以下步骤处理：
-
-1. 需求分析：
-- 用户需求：{user_input}
-- 请详细分析需求的关键点和目标
-
-2. 任务分解：
-- 将需求分解为具体的任务项
-- 确定任务的优先级和依赖关系
-
-3. 任务分配：
-- 根据团队成员的专长分配任务
-- 制定任务时间表和里程碑
-
-请提供一个结构化的响应，包含以上各个方面。
-"""
-            mike_response = self.baidu_client.get_completion([
-                {"role": "user", "content": mike_prompt}
-            ])
-            self._update_conversation("Mike", {"type": "analysis", "content": mike_response})
-            
-            # 2. Emma(Product Manager)进行需求分析
-            emma_prompt = f"""作为产品经理 Emma，你需要从产品角度深入分析需求。请关注以下方面：
-
-1. 用户需求：{user_input}
-2. 团队负责人的分析：{mike_response}
-
-请提供：
-- 详细的功能需求说明
-- 用户界面和交互设计建议
-- 产品验收标准
-- 可能的产品风险点
-- 后续迭代建议
-
-请从产品角度提供一个全面的分析报告。
-"""
-            emma_response = self.baidu_client.get_completion([
-                {"role": "user", "content": emma_prompt}
-            ])
-            self._update_conversation("Emma", {"type": "requirements", "content": emma_response})
-            
-            # 3. Bob(Architect)进行架构设计
-            bob_prompt = f"""作为架构师 Bob，请基于需求提供详细的技术方案。需要考虑：
-
-1. 当前需求：
-- 用户原始需求：{user_input}
-- 产品需求分析：{emma_response}
-
-2. 请提供：
-- 系统架构设计
-- 技术选型建议
-- 数据结构设计
-- 接口设计
-- 安全性考虑
-- 扩展性设计
-
-请提供一个完整的技术架构方案。
-"""
-            bob_response = self.baidu_client.get_completion([
-                {"role": "user", "content": bob_prompt}
-            ])
-            self._update_conversation("Bob", {"type": "architecture", "content": bob_response})
-            
-            # 4. Alex(Engineer)实现代码
-            alex_prompt = f"""作为工程师 Alex，请提供具体的实现方案：
-
-1. 背景信息：
-- 用户需求：{user_input}
-- 架构设计：{bob_response}
-
-2. 请提供：
-- 具体的代码实现方案
-- 代码结构设计
-- 主要功能模块的实现细节
-- 单元测试计划
-- 集成测试策略
-- 部署方案
-
-请提供一个详细的技术实现方案。
-"""
-            alex_response = self.baidu_client.get_completion([
-                {"role": "user", "content": alex_prompt}
-            ])
-            self._update_conversation("Alex", {"type": "implementation", "content": alex_response})
-            
-            # 5. David(Data Analyst)进行性能分析
-            david_prompt = f"""作为数据分析师 David，请对实现方案进行全面分析：
-
-1. 分析对象：
-- 实现方案：{alex_response}
-
-2. 请提供：
-- 性能瓶颈分析
-- 资源使用评估
-- 可能的优化建议
-- 监控指标建议
-- 性能测试方案
-- 数据安全建议
-
-请提供一个完整的分析报告。
-"""
-            david_response = self.baidu_client.get_completion([
-                {"role": "user", "content": david_prompt}
-            ])
-            self._update_conversation("David", {"type": "analysis", "content": david_response})
-            
-            return {
-                "conversation": self.conversation_history,
-                "final_result": {
-                    "mike": mike_response,
-                    "emma": emma_response,
-                    "bob": bob_response,
-                    "alex": alex_response,
-                    "david": david_response
-                }
+            # 创建用户消息
+            user_message = {
+                "role": "user",
+                "content": input_content,
+                "timestamp": int(time.time() * 1000)
             }
+            
+            # 将用户消息添加到对话历史
+            self.conversation_history.append(user_message)
+            
+            # 通过WebSocket发送用户消息
+            self.ws_handler.send_message({
+                "type": "user_message",
+                "message": user_message
+            })
+            
+            # 依次获取各个Agent的回复
+            try:
+                # 团队负责人Mike分析需求
+                mike_prompt = f"你是团队负责人Mike，请分析用户的需求并分配任务给团队成员。用户输入: {input_content}"
+                mike_response = self.baidu_client.get_response([
+                    {"role": "user", "content": mike_prompt}
+                ])
+                # 使用单独的消息添加到对话历史
+                self._update_conversation("Mike", mike_response)
+                
+                # 产品经理Emma负责产品需求
+                emma_prompt = f"你是产品经理Emma，根据用户的需求: '{input_content}'，以及团队负责人Mike的分析: '{mike_response}'，提出产品角度的建议和计划。"
+                emma_response = self.baidu_client.get_response([
+                    {"role": "user", "content": emma_prompt}
+                ])
+                # 使用单独的消息添加到对话历史
+                self._update_conversation("Emma", emma_response)
+                
+                # 架构师Bob负责技术架构
+                bob_prompt = f"你是架构师Bob，根据用户的需求: '{input_content}'，团队负责人Mike的分析: '{mike_response}'，以及产品经理Emma的规划: '{emma_response}'，提出技术架构方案。"
+                bob_response = self.baidu_client.get_response([
+                    {"role": "user", "content": bob_prompt}
+                ])
+                # 使用单独的消息添加到对话历史
+                self._update_conversation("Bob", bob_response)
+                
+                # 工程师Alex负责代码实现
+                alex_prompt = f"你是工程师Alex，根据用户的需求: '{input_content}'，团队负责人Mike的分析: '{mike_response}'，产品经理Emma的规划: '{emma_response}'，以及架构师Bob的方案: '{bob_response}'，提出具体的代码实现方案。"
+                alex_response = self.baidu_client.get_response([
+                    {"role": "user", "content": alex_prompt}
+                ])
+                # 使用单独的消息添加到对话历史
+                self._update_conversation("Alex", alex_response)
+                
+                # 数据分析师David负责性能分析
+                david_prompt = f"你是数据分析师David，根据用户的需求: '{input_content}'，团队负责人Mike的分析: '{mike_response}'，产品经理Emma的规划: '{emma_response}'，架构师Bob的方案: '{bob_response}'，以及工程师Alex的实现: '{alex_response}'，提出性能优化和指标监控建议。"
+                david_response = self.baidu_client.get_response([
+                    {"role": "user", "content": david_prompt}
+                ])
+                # 使用单独的消息添加到对话历史
+                self._update_conversation("David", david_response)
+                
+                # 最后由Mike做总结
+                summary_prompt = f"你是团队负责人Mike，请总结团队各成员（Emma, Bob, Alex, David）对用户需求的处理结果。用户需求: '{input_content}'，Emma的产品规划: '{emma_response}'，Bob的架构方案: '{bob_response}'，Alex的代码实现: '{alex_response}'，David的性能分析: '{david_response}'。"
+                summary_response = self.baidu_client.get_response([
+                    {"role": "user", "content": summary_prompt}
+                ])
+                # 使用单独的消息添加到对话历史
+                self._update_conversation("Mike总结", summary_response)
+                
+            except Exception as e:
+                # 如果AI回复失败，记录错误并使用默认回复
+                logging.error(f"获取AI回复失败: {str(e)}")
+                default_response = "抱歉，AI处理请求时出现错误，请稍后重试。错误详情: " + str(e)
+                self._update_conversation("系统", default_response)
+            
+            # 返回成功状态和对话历史
+            return {"success": True, "conversation": self.conversation_history}
+        
+        except Exception as e:
+            # 记录并返回错误
+            logging.error(f"处理输入时出错: {str(e)}")
+            error_response = {
+                "success": False,
+                "error": f"处理输入时出错: {str(e)}",
+                "conversation": self.conversation_history
+            }
+            return error_response
+        
+    def _update_conversation(self, agent_name: str, response: str):
+        """更新对话历史并通过WebSocket发送消息
+        
+        Args:
+            agent_name: 代理名称
+            response: AI响应内容
+        """
+        try:
+            # 创建AI消息对象
+            ai_message = {
+                "role": "assistant",
+                "agent": agent_name,
+                "content": response,
+                "timestamp": int(time.time() * 1000)
+            }
+            
+            # 添加到对话历史
+            self.conversation_history.append(ai_message)
+            
+            # 通过WebSocket发送AI消息
+            self.ws_handler.send_message({
+                "type": "ai_message",
+                "message": ai_message
+            })
+            
+            logging.info(f"发送{agent_name}的消息成功")
             
         except Exception as e:
-            error_message = f"处理请求时出错: {str(e)}"
-            self._update_conversation("System", {"type": "error", "content": error_message})
-            return {
-                "conversation": self.conversation_history,
-                "error": error_message
-            }
-        
-    def _update_conversation(self, agent_name: str, response: Dict):
-        """更新对话历史并发送WebSocket更新"""
-        timestamp = datetime.now().isoformat()
-        
-        # 构造消息内容
-        message_content = response.get('content', '')
-        if isinstance(message_content, dict):
-            message_content = message_content.get('content', '')
+            # 记录错误
+            logging.error(f"更新对话时出错: {str(e)}")
             
-        # 添加到对话历史
-        self.conversation_history.append({
-            "role": "agent",
-            "name": agent_name,
-            "content": message_content,
-            "timestamp": timestamp
-        })
+            # 尝试发送错误消息
+            try:
+                error_message = {
+                    "role": "system",
+                    "content": f"发送{agent_name}消息时出错: {str(e)}",
+                    "timestamp": int(time.time() * 1000)
+                }
+                self.conversation_history.append(error_message)
+                self.ws_handler.send_message({
+                    "type": "error",
+                    "message": error_message
+                })
+            except Exception as send_error:
+                logging.error(f"发送错误消息时出错: {str(send_error)}")
+                # 此处不再递归调用，避免潜在的无限递归
         
-        # 发送WebSocket更新
-        if self.ws_handler:
-            # 发送Agent响应
-            self.ws_handler.emit_agent_response(
-                agent_name=agent_name,
-                message=message_content,
-                response_type=response.get('type', 'message')
-            )
-            
-            # 如果不是第一个Agent的响应，发送连接更新
-            if len(self.conversation_history) > 2:
-                prev_agent = self.conversation_history[-2]
-                if prev_agent["role"] == "agent":
-                    self.ws_handler.emit_connection_update(
-                        prev_agent["name"],
-                        agent_name,
-                        True
-                    )
-                    
     def create_task(
         self,
         title: str,

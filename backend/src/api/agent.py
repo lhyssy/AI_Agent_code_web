@@ -2,23 +2,44 @@ from flask import Blueprint, request, jsonify
 from services.agent_service import MultiAgentSystem
 
 agent_bp = Blueprint('agent', __name__)
-agent_system = MultiAgentSystem()
+# 声明为全局变量，但延迟初始化
+agent_system = None
+
+def init_agent_system(ws_handler=None):
+    """初始化Agent系统，设置WebSocket处理器"""
+    global agent_system
+    if agent_system is None:
+        print("初始化Agent系统...")
+        agent_system = MultiAgentSystem(ws_handler)
+    elif ws_handler is not None:
+        print("更新Agent系统的WebSocket处理器...")
+        agent_system.ws_handler = ws_handler
+    return agent_system
 
 @agent_bp.route('/analyze', methods=['POST'])
 def analyze_request():
     """分析用户请求并生成任务分配方案"""
     try:
+        print("收到前端analyze请求...")
         data = request.get_json()
         message = data.get('message')
         
         if not message:
             return jsonify({'error': '消息不能为空'}), 400
+        
+        # 确保agent_system已初始化
+        global agent_system
+        if agent_system is None:
+            init_agent_system()
             
+        print(f"处理用户输入: {message[:50]}...")
         result = agent_system.process_input(message)
+        print(f"处理结果: {result.get('success')}, 数据包含键: {list(result.keys())}")
         return jsonify(result), 200
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"处理请求出错: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @agent_bp.route('/tasks', methods=['POST'])
 def create_task():

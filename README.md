@@ -31,9 +31,12 @@ AI_Agent_code_web/
 │   └── public/          # 静态资源
 │
 ├── backend/               # 后端应用目录
-│   ├── app/              # 应用主目录
-│   ├── config.py         # 配置文件
-│   └── run.py            # 启动脚本
+│   ├── src/              # 源代码目录
+│   │   ├── api/         # API接口目录
+│   │   ├── utils/       # 工具函数目录
+│   │   └── app.py      # 主应用入口
+│   ├── static/          # 静态资源目录
+│   └── requirements.txt  # 依赖配置文件
 │
 └── README.md             # 项目说明文档
 ```
@@ -105,6 +108,14 @@ pip install -r requirements.txt
 
 4. 启动开发服务器
 
+**方法1：使用启动脚本 (Windows)** 
+```
+双击运行 start-services.bat
+```
+这将同时启动前端和后端服务。
+
+**方法2：分别启动**
+
 前端:
 ```bash
 cd frontend
@@ -114,10 +125,41 @@ npm run dev
 后端:
 ```bash
 cd backend
-python run.py
+cd src
+python app.py
 ```
 
 访问 http://localhost:3000 查看应用
+
+## 问题排查
+
+### 常见问题
+
+1. **"API服务未连接"错误**
+   - 确保后端服务已启动并监听在端口5000上
+   - 检查防火墙或安全软件是否阻止了连接
+   - 在Windows上，使用`start-services.bat`脚本启动服务
+   - 在浏览器中访问 http://localhost:5000/health 测试后端健康状态
+
+2. **"Failed to fetch"错误**
+   - 这通常表示前端无法连接到后端API
+   - 确保后端服务正在运行，检查启动命令是否有错误
+   - 检查浏览器控制台是否有更详细的错误信息
+
+3. **WebSocket连接断开**
+   - 检查后端日志查看是否有错误信息
+   - 确保网络稳定，没有代理干扰WebSocket连接
+
+4. **代码高亮不显示**
+   - 确保`react-syntax-highlighter`依赖已正确安装
+   - 清除浏览器缓存后重试
+
+### 环境要求
+
+- Node.js >= 14.0.0 (推荐使用 Node.js 18)
+- Python >= 3.8 (推荐使用 Python 3.10)
+- SQLite3
+- 现代浏览器（Chrome, Firefox, Safari, Edge）
 
 ## AI代理团队
 

@@ -138,10 +138,17 @@ export default function ChatWindow() {
       groups[date].push(message);
     });
 
-    return Object.entries(groups).map(([date, messages]) => ({
-      date: new Date(date),
-      messages
-    }));
+    return Object.entries(groups).map(([date, messages]) => {
+      // 使用日期和消息组的第一个和最后一个消息ID来生成唯一ID
+      const firstId = messages[0].id;
+      const lastId = messages[messages.length - 1].id;
+      const groupId = `${date}-${firstId}-${lastId}`;
+      return {
+        id: groupId,
+        date: new Date(date),
+        messages
+      };
+    });
   };
 
   const messageGroups = groupMessagesByDate(currentSession.messages);
@@ -153,13 +160,88 @@ export default function ChatWindow() {
       <div className="flex-1 flex flex-col bg-gray-900">
         {/* Connection status */}
         {!isConnected && (
-          <div className="bg-red-500 text-white px-4 py-2 text-sm">
-            API服务未连接，请检查网络连接或稍后重试
+          <div className="bg-red-500/20 border border-red-500/50 text-white px-4 py-3 text-sm flex items-center justify-between rounded-md m-2">
+            <div className="flex flex-col">
+              <div className="flex items-center mb-1">
+                <svg className="w-5 h-5 text-red-400 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+                <span className="font-medium">后端服务未连接</span>
+              </div>
+              <div className="ml-7 text-xs text-gray-300">
+                请按以下步骤启动后端服务:
+                <pre className="mt-1 bg-gray-800/50 p-1 rounded text-gray-400 overflow-x-auto">
+                  1. cd backend<br/>
+                  2. cd src<br/>
+                  3. python app.py
+                </pre>
+                <div className="mt-1 text-gray-400">
+                  如果仍然无法连接，请检查:
+                  <ul className="list-disc ml-4 mt-1">
+                    <li>端口5000是否被占用</li>
+                    <li>防火墙设置是否允许连接</li>
+                    <li>Python环境是否正确配置</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button 
+                onClick={() => window.location.reload()}
+                className="bg-red-500/30 hover:bg-red-500/50 px-3 py-1 rounded-md transition-colors text-xs whitespace-nowrap"
+              >
+                重试连接
+              </button>
+              <a 
+                href="http://localhost:5000/health"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-gray-700/50 hover:bg-gray-700 px-3 py-1 rounded-md transition-colors text-xs whitespace-nowrap text-center"
+              >
+                检查后端状态
+              </a>
+            </div>
           </div>
         )}
 
-        {/* Error message */}
-        {error && (
+        {/* Failed to fetch error message */}
+        {error && error.includes('fetch') && (
+          <div className="bg-amber-500/20 border border-amber-500/50 text-white px-4 py-3 text-sm flex items-center justify-between rounded-md mx-2 mb-1">
+            <div className="flex flex-col">
+              <div className="flex items-center mb-1">
+                <svg className="w-5 h-5 text-amber-400 mr-2" fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" stroke="currentColor">
+                  <path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span className="font-medium">网络请求失败</span>
+              </div>
+              <div className="ml-7 text-xs text-gray-300">
+                可能的原因:
+                <ul className="list-disc ml-4 mt-1">
+                  <li>后端服务未启动或已停止</li>
+                  <li>网络连接不稳定</li>
+                  <li>服务器响应超时</li>
+                </ul>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleSend(currentSession?.messages[currentSession.messages.length - 1]?.content || '')}
+                className="bg-amber-500/30 hover:bg-amber-500/50 px-3 py-1 rounded-md transition-colors text-xs"
+              >
+                重试请求
+              </button>
+              <button 
+                onClick={() => setError(null)}
+                className="text-amber-400 hover:text-amber-300 p-1"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Other error messages */}
+        {error && !error.includes('fetch') && (
           <div className="bg-red-500 text-white px-4 py-2 text-sm flex items-center justify-between">
             <span>{error}</span>
             <button
@@ -177,7 +259,7 @@ export default function ChatWindow() {
           className="flex-1 overflow-y-auto p-4"
         >
           {messageGroups.map(group => (
-            <TimeGroup key={group.date.toISOString()} date={group.date}>
+            <TimeGroup key={group.id} date={group.date}>
               {group.messages.map(message => (
                 <Message
                   key={message.id}

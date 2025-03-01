@@ -5,6 +5,11 @@ import { ChatContextType, ChatSession, Message, Agent } from './types';
 import { socketService } from '@/lib/socket';
 import { ApiService } from '@/lib/api';
 
+// 生成唯一ID的辅助函数
+const generateUniqueId = () => {
+  return `${Date.now().toString()}-${Math.random().toString(36).substring(2, 9)}`;
+};
+
 const defaultAgents: Agent[] = [
   {
     name: 'Mike',
@@ -91,27 +96,94 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 监听WebSocket消息
     const unsubscribe = socketService.onMessage((data) => {
+      console.log('收到新的WebSocket消息:', data);
+      
+      // 确保消息格式正确
       const messageContent = typeof data.message === 'string' ? 
         data.message : 
-        (data.message.content || '无效的消息格式');
+        (data.message && data.message.content ? data.message.content : '无效的消息格式');
 
+      // 为每条消息生成唯一ID
+      const messageId = generateUniqueId();
+      console.log(`为消息创建ID: ${messageId}`);
+      
+      // 获取代理名称，确保它存在
+      const agentName = data.agentName ? data.agentName.toLowerCase() : 
+                       (data.agent ? data.agent.toLowerCase() : 'system');
+      
+      // 创建新消息对象
       const newMessage: Message = {
-        id: Date.now().toString(),
+        id: messageId,
         role: 'assistant',
         content: messageContent,
         timestamp: new Date(),
-        agentName: data.agentName.toLowerCase(),
+        agentName: agentName,
         status: 'sent'
       };
+      
+      // 在SessionStorage中备份该消息，防止状态丢失
+      try {
+        const backupKey = `message_backup_${messageId}`;
+        sessionStorage.setItem(backupKey, JSON.stringify(newMessage));
+        console.log(`已备份消息到SessionStorage: ${backupKey}`);
+      } catch (e) {
+        console.error('备份消息失败:', e);
+      }
 
       setCurrentSession(prev => {
-        if (!prev) return null;
+        if (!prev) {
+          console.log('没有当前会话，创建新会话');
+          // 如果没有当前会话，创建一个新会话
+          const newSession: ChatSession = {
+            id: Date.now().toString(),
+            title: '新对话',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            messages: [newMessage],
+            unreadCount: 1,
+            archived: false
+          };
+          
+          // 保存新会话到localStorage以确保持久化
+          try {
+            const updatedSessions = [...sessions, newSession];
+            localStorage.setItem('chat_sessions', JSON.stringify(updatedSessions));
+            console.log('已创建并保存新会话');
+            
+            // 更新会话列表
+            setSessions(updatedSessions);
+          } catch (e) {
+            console.error('保存新会话失败:', e);
+          }
+          
+          return newSession;
+        }
+        
+        console.log(`更新现有会话 ID: ${prev.id}, 添加消息 ID: ${messageId}`);
+        
+        // 创建会话的深拷贝，避免状态问题
         const updated = {
           ...prev,
           messages: [...prev.messages, newMessage],
           updatedAt: new Date()
         };
-        updateSession(updated);
+        
+        // 立即保存更新后的会话，确保消息持久化
+        try {
+          const updatedSessions = sessions.map(s => 
+            s.id === updated.id ? updated : s
+          );
+          localStorage.setItem('chat_sessions', JSON.stringify(updatedSessions));
+          console.log('已更新并保存现有会话');
+          
+          // 在下一个事件循环更新会话列表，避免状态冲突
+          setTimeout(() => {
+            setSessions(updatedSessions);
+          }, 0);
+        } catch (e) {
+          console.error('保存更新会话失败:', e);
+        }
+        
         return updated;
       });
     });
@@ -180,7 +252,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const newMessage: Message = {
-      id: Date.now().toString(),
+      id: generateUniqueId(),
       role: 'user',
       content,
       timestamp: new Date(),
